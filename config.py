@@ -20,7 +20,7 @@ FPS = 60
 
 MARGIN = SPACE_XL          # breathing room around everything
 SIDEBAR_W = 400            # right-hand panel
-PANEL_GAP = SPACE_LG       # gap between board area and sidebar
+PANEL_GAP = SPACE_XL + 32  # gap between board area and sidebar (increased)
 
 # chat panel
 CHAT_BUBBLE_PAD = 12
@@ -38,6 +38,12 @@ BOARD_X = MARGIN + EVAL_BAR_W + EVAL_BAR_GAP + 10   # room for eval bar
 BOARD_Y = (WINDOW_H - BOARD_PX) // 2
 
 SIDEBAR_X = BOARD_X + BOARD_PX + PANEL_GAP
+
+def update_layout(w, h):
+    global WINDOW_W, WINDOW_H, BOARD_Y
+    WINDOW_W = w
+    WINDOW_H = h
+    BOARD_Y = (WINDOW_H - BOARD_PX) // 2
 
 # ---------------------------------------------------------------- palette
 # Two complete palettes. All drawing code reads module attributes at
@@ -116,8 +122,8 @@ def set_theme(name):
 set_theme("light")
 
 # ---------------------------------------------------------------- type
-FONT_NAME     = "dejavusans,segoeuisymbol,arial"
-PIECE_FONT    = "dejavusans,segoeuisymbol"  # needs chess glyphs
+FONT_NAME     = "segoeui,arial"
+PIECE_FONT    = "segoeuisymbol,segoeui,arial"  # needs chess glyphs
 SIZE_TITLE    = 26
 SIZE_BODY     = 17
 SIZE_SMALL    = 14

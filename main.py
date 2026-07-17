@@ -81,7 +81,7 @@ class State:
 class Game:
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((C.WINDOW_W, C.WINDOW_H))
+        self.screen = pygame.display.set_mode((C.WINDOW_W, C.WINDOW_H), pygame.RESIZABLE)
         pygame.display.set_caption("Shodan")
         self.clock = pygame.time.Clock()
 
@@ -695,6 +695,11 @@ class Game:
                     self.handle_key(event)
                 elif event.type == pygame.TEXTINPUT and self.state.input_focus:
                     self.state.input_text += event.text
+                elif event.type == pygame.VIDEORESIZE:
+                    C.update_layout(event.w, event.h)
+                    self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                    from ui import UI
+                    self.ui = UI(self.screen)
 
             # answers arriving from the tutor thread
             try:
