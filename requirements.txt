@@ -1,0 +1,5 @@
+pygame
+python-chess
+
+# Optional extras used by specific features:
+# zstandard
