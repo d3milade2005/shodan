@@ -844,30 +844,52 @@ class UI:
             ("Pawn", "\u2659", "Moves forward one square (two on its first move). Captures diagonally.")
         ]
 
+        if not hasattr(state, "guide_scroll"):
+            state.guide_scroll = 0
+
+        total_h = 0
+        pieces_data = []
         for name, glyph, desc in pieces_info:
-            h = 80
-            rect = pygame.Rect(x, y, w, h)
+            name_img = self.f_body.render(name, True, C.TEXT_PRIMARY)
+            lines = self._wrap(desc, self.f_small, w - 90)
+            text_h = 14 + name_img.get_height() + len(lines) * (self.f_small.get_height() + 2) + 14
+            h = max(80, text_h)
+            pieces_data.append((name, glyph, desc, name_img, lines, h))
+            total_h += h + C.SPACE_SM
+            
+        clip_rect = pygame.Rect(x, y, w, C.WINDOW_H - y - C.MARGIN)
+        self.guide_rect = clip_rect
+        
+        max_scroll = max(0, total_h - clip_rect.h)
+        state.guide_scroll = max(0, min(state.guide_scroll, max_scroll))
+
+        clip = self.screen.get_clip()
+        self.screen.set_clip(clip_rect)
+
+        by = y - state.guide_scroll
+        for name, glyph, desc, name_img, lines, h in pieces_data:
+            rect = pygame.Rect(x, by, w, h)
             self._card(rect)
             
-            # Draw piece icon
-            pygame.draw.circle(self.screen, C.COACH_BUBBLE, (x + 40, y + 40), 24)
+            # Draw piece icon centered vertically in the card
+            pygame.draw.circle(self.screen, C.COACH_BUBBLE, (x + 40, by + h // 2), 24)
             img = self.f_piece.render(glyph, True, C.PIECE_WHITE)
             outl = self.f_piece.render(glyph, True, C.PIECE_OUTLINE_W)
             for dx, dy in ((-2,0), (2,0), (0,-2), (0,2)):
-                self.screen.blit(outl, outl.get_rect(center=(x + 40 + dx, y + 40 + dy)))
-            self.screen.blit(img, img.get_rect(center=(x + 40, y + 40)))
+                self.screen.blit(outl, outl.get_rect(center=(x + 40 + dx, by + h // 2 + dy)))
+            self.screen.blit(img, img.get_rect(center=(x + 40, by + h // 2)))
             
             # Text
-            name_img = self.f_body.render(name, True, C.TEXT_PRIMARY)
-            self.screen.blit(name_img, (x + 80, y + 12))
+            self.screen.blit(name_img, (x + 80, by + 12))
             
-            lines = self._wrap(desc, self.f_small, w - 90)
-            ty = y + 14 + name_img.get_height()
+            ty = by + 14 + name_img.get_height()
             for ln in lines:
                 self.screen.blit(self.f_small.render(ln, True, C.TEXT_SECOND), (x + 80, ty))
                 ty += self.f_small.get_height() + 2
 
-            y += h + C.SPACE_SM
+            by += h + C.SPACE_SM
+
+        self.screen.set_clip(clip)
 
 
     # theme toggle

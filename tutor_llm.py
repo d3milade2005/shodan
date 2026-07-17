@@ -98,11 +98,12 @@ class Tutor:
     def __init__(self, engine):
         self.engine = engine
         self.api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        self.openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
         self.busy = False
 
     @property
     def llm_available(self):
-        return bool(self.api_key)
+        return bool(self.api_key) or bool(self.openai_key)
 
     def ask_async(self, question, board, last_move_san, history, callback, level=1):
         """Answer on a background thread; callback(text) on completion."""
@@ -123,7 +124,11 @@ class Tutor:
 
                 analysis += f"\nStudent level: {names.get(level, names[1])}"
                 if self.llm_available:
-                    text = self._ask_llm(question, analysis, history)
+                    if self.openai_key:
+                        text = self._ask_openai(question, analysis, history)
+                    else:
+                        text = self._ask_llm(question, analysis, history)
+                        
                     if text is None:
                         text = self._ask_offline(question, board_copy, tops)
                 else:
@@ -168,6 +173,35 @@ class Tutor:
                 data = json.loads(resp.read())
             parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
             text = " ".join(parts).strip()
+            return text or None
+        except Exception:
+            return None
+
+
+    def _ask_openai(self, question, analysis, history):
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for role, text in history[-6:]:
+            messages.append({"role": "user" if role == "user" else "assistant", "content": text})
+
+        messages.append({
+            "role": "user",
+            "content": f"ANALYSIS (ground truth, trust this):\n{analysis}\n\nStudent's question: {question}"
+        })
+        
+        payload = json.dumps({
+            "model": "gpt-5-nano",
+            "messages": messages,
+        }).encode()
+
+        req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=payload, headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.openai_key}",
+        })
+
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read())
+            text = data["choices"][0]["message"]["content"].strip()
             return text or None
         except Exception:
             return None
@@ -252,6 +286,6 @@ class Tutor:
             "Good question! I can help best with things like 'what "
             "should I do?', 'why is that the best move?', 'what is "
             "threatened?', or 'what's my plan?'. "
-            "(Tip: set an ANTHROPIC_API_KEY to unlock the full "
+            "(Tip: set an OPENAI_API_KEY or ANTHROPIC_API_KEY to unlock the full "
             "conversational coach that can answer anything.) " + suggest()
         )

@@ -12,6 +12,12 @@ it, a built-in rule-based tutor answers common questions offline.
 """
 
 import sys, pygame, chess, queue
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 import config as C
 from engine_ai import Engine
 from coach import Coach, attacked_squares
@@ -111,7 +117,7 @@ class Game:
         else:
             self.say(
                 "Ask me things like 'what should I do?' or 'any threats?' using the box below. (Set an "
-                "ANTHROPIC_API_KEY to unlock my full conversational mode.)"
+                "OPENAI_API_KEY or ANTHROPIC_API_KEY to unlock my full conversational mode.)"
             )
             
         self.state.engine_label = (
@@ -694,9 +700,13 @@ class Game:
                 elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     self.board_release(event.pos)
                 elif event.type == pygame.MOUSEWHEEL:
-                    if hasattr(self.ui, "chat_rect") and \
-                            self.ui.chat_rect.collidepoint(pygame.mouse.get_pos()):
+                    mpos = pygame.mouse.get_pos()
+                    if hasattr(self.ui, "chat_rect") and self.ui.chat_rect.collidepoint(mpos):
                         self.state.chat_scroll += event.y * 30
+                    elif hasattr(self.ui, "guide_rect") and self.ui.guide_rect.collidepoint(mpos):
+                        if not hasattr(self.state, "guide_scroll"):
+                            self.state.guide_scroll = 0
+                        self.state.guide_scroll -= event.y * 30
                 elif event.type == pygame.KEYDOWN:
                     self.handle_key(event)
                 elif event.type == pygame.TEXTINPUT and self.state.input_focus:

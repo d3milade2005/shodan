@@ -1,5 +1,6 @@
 pygame
 python-chess
+python-dotenv
 
 # Optional extras used by specific features:
 # zstandard
