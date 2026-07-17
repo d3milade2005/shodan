@@ -14,13 +14,14 @@ SPACE_LG = 36
 SPACE_XL = 48
 
 # ---------------------------------------------------------------- window
-WINDOW_W = 1240
+WINDOW_W = 1460
 WINDOW_H = 820
 FPS = 60
 
 MARGIN = SPACE_XL          # breathing room around everything
-SIDEBAR_W = 400            # right-hand panel
-PANEL_GAP = SPACE_XL + 32  # gap between board area and sidebar (increased)
+SIDEBAR_W = 340            # right-hand panel
+CHAT_W = 340               # left-hand panel
+PANEL_GAP = SPACE_XL       # gap between panels
 
 # chat panel
 CHAT_BUBBLE_PAD = 12
@@ -33,17 +34,49 @@ USER_TEXT = (12, 68, 124)
 SQUARE = 80
 BOARD_PX = SQUARE * 8      # 640
 EVAL_BAR_W = 14
-EVAL_BAR_GAP = SPACE_SM
-BOARD_X = MARGIN + EVAL_BAR_W + EVAL_BAR_GAP + 10   # room for eval bar
-BOARD_Y = (WINDOW_H - BOARD_PX) // 2
+EVAL_BAR_GAP = SPACE_MD + 8
+BOARD_X = 0
+BOARD_Y = 0
+SIDEBAR_X = 0
+CHAT_X = 0
 
-SIDEBAR_X = BOARD_X + BOARD_PX + PANEL_GAP
-
-def update_layout(w, h):
-    global WINDOW_W, WINDOW_H, BOARD_Y
+def update_layout(w, h, sidebar_minimized=False):
+    global WINDOW_W, WINDOW_H, BOARD_Y, BOARD_X, SIDEBAR_X, CHAT_X
+    global CHAT_W, SIDEBAR_W, MARGIN, PANEL_GAP
     WINDOW_W = w
     WINDOW_H = h
     BOARD_Y = (WINDOW_H - BOARD_PX) // 2
+    
+    CHAT_W = 340
+    SIDEBAR_W = 340
+    MARGIN = SPACE_XL
+    PANEL_GAP = SPACE_XL
+    
+    if sidebar_minimized:
+        total_w = EVAL_BAR_W + EVAL_BAR_GAP + 10 + BOARD_PX
+        start_x = max(MARGIN, (w - total_w) // 2)
+        BOARD_X = start_x + EVAL_BAR_W + EVAL_BAR_GAP + 10
+        SIDEBAR_X = -1000
+        CHAT_X = -1000
+    else:
+        req = MARGIN * 2 + CHAT_W + PANEL_GAP + EVAL_BAR_W + EVAL_BAR_GAP + 10 + BOARD_PX + PANEL_GAP + SIDEBAR_W
+        if req > w:
+            MARGIN = max(16, MARGIN - (req - w) // 4)
+            PANEL_GAP = max(32, PANEL_GAP - (req - w) // 4)
+            req = MARGIN * 2 + CHAT_W + PANEL_GAP + EVAL_BAR_W + EVAL_BAR_GAP + 10 + BOARD_PX + PANEL_GAP + SIDEBAR_W
+            if req > w:
+                excess = req - w
+                CHAT_W = max(280, CHAT_W - excess // 2)
+                SIDEBAR_W = max(280, SIDEBAR_W - excess // 2)
+                
+        total_content = CHAT_W + PANEL_GAP + EVAL_BAR_W + EVAL_BAR_GAP + 10 + BOARD_PX + PANEL_GAP + SIDEBAR_W
+        start_x = max(MARGIN, (w - total_content) // 2)
+        
+        CHAT_X = start_x
+        BOARD_X = CHAT_X + CHAT_W + PANEL_GAP + EVAL_BAR_W + EVAL_BAR_GAP + 10
+        SIDEBAR_X = BOARD_X + BOARD_PX + PANEL_GAP
+
+update_layout(WINDOW_W, WINDOW_H)
 
 # ---------------------------------------------------------------- palette
 # Two complete palettes. All drawing code reads module attributes at

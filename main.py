@@ -57,7 +57,7 @@ class State:
         self.dragging = False
         self.anim = None
         # review mode
-        self.mode = "play"   # 'play' | 'review' | 'puzzle' | 'lessons'
+        self.mode = "play"   # 'play' | 'review' | 'puzzle' | 'lessons' | 'guide'
         self.report = None
         self.review_ply = 0
         self.review_evals = []
@@ -76,6 +76,7 @@ class State:
         self.puzzle_side = "White"
         self.skill = 1
         self.hint_stage = 0
+        self.sidebar_minimized = False
 
 
 class Game:
@@ -500,9 +501,14 @@ class Game:
         elif key == "tab_stats":
             self.state.mode = "stats"
             self.state.skill = storage.skill_level()
-
+        elif key == "tab_guide":
+            self.state.mode = "guide"
 
     def on_button(self, key):
+        if key == "toggle_sidebar":
+            self.state.sidebar_minimized = not self.state.sidebar_minimized
+            C.update_layout(self.screen.get_width(), self.screen.get_height(), self.state.sidebar_minimized)
+            return
         if key == "theme":
             C.set_theme("dark" if C.THEME == "light" else "light")
             storage.set_setting("theme", C.THEME)
@@ -760,6 +766,9 @@ class Game:
             if self.state.mode == "stats":
                 self.ui.draw_board(self.board, self.state)
                 self.ui.draw_stats_sidebar(self.state)
+            elif self.state.mode == "guide":
+                self.ui.draw_board(self.board, self.state)
+                self.ui.draw_guide_sidebar(self.state)
             elif self.state.mode in ("puzzle", "lessons"):
                 show_board = (self.state.mode == "puzzle" and
                               self.state.current_puzzle) or \
@@ -783,7 +792,9 @@ class Game:
                 self.ui.draw_board(self.board, self.state)
                 self.ui.draw_eval_bar(self.state.evaluation)
                 self.ui.draw_sidebar(self.state)
-            self.ui.draw_theme_toggle()
+                
+            self.ui.draw_chat_sidebar(self.state)
+            self.ui.draw_theme_toggle(self.state)
             pygame.display.flip()
             self.clock.tick(C.FPS)
 

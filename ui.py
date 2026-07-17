@@ -23,6 +23,7 @@ class UI:
         self.f_title = pygame.font.SysFont(C.FONT_NAME, C.SIZE_TITLE, bold=True)
         self.f_body = pygame.font.SysFont(C.FONT_NAME, C.SIZE_BODY)
         self.f_small = pygame.font.SysFont(C.FONT_NAME, C.SIZE_SMALL)
+        self.f_label = pygame.font.SysFont(C.FONT_NAME, C.SIZE_SMALL + 2, bold=True)
         self.f_piece = pygame.font.SysFont(C.PIECE_FONT, C.SIZE_PIECE)
         self.buttons = {}  # name -> rect (rebuilt every frame)
 
@@ -165,16 +166,19 @@ class UI:
         if state.hint_move:
             self._arrow(state.hint_move.from_square, state.hint_move.to_square, C.ARROW_GOOD)
 
-        # file/rank labels, kept outside the board for cleanliness
+        # file/rank labels outside the board (top and left)
         for i in range(8):
-            f = self.f_small.render("abcdefgh"[i], True, C.TEXT_MUTED)
-            self.screen.blit(f, (C.BOARD_X + i * C.SQUARE + C.SQUARE // 2 - 4, C.BOARD_Y + C.BOARD_PX + C.SPACE_SM))
-            r = self.f_small.render(str(8 - i), True, C.TEXT_MUTED)
-            self.screen.blit(r, (C.BOARD_X + C.BOARD_PX + C.SPACE_SM + 2, C.BOARD_Y + i * C.SQUARE + C.SQUARE // 2 - 8))
+            f = self.f_label.render("abcdefgh"[i], True, C.TEXT_MUTED)
+            self.screen.blit(f, (C.BOARD_X + i * C.SQUARE + C.SQUARE // 2 - f.get_width() // 2, 
+                                 C.BOARD_Y - C.SPACE_MD - 6))
+            
+            r = self.f_label.render(str(8 - i), True, C.TEXT_MUTED)
+            self.screen.blit(r, (C.BOARD_X - C.SPACE_MD - 4, 
+                                 C.BOARD_Y + i * C.SQUARE + C.SQUARE // 2 - r.get_height() // 2))
 
 
     def draw_eval_bar(self, evaluation):
-        x = C.MARGIN
+        x = C.BOARD_X - 10 - C.EVAL_BAR_GAP - C.EVAL_BAR_W
         rect = pygame.Rect(x, C.BOARD_Y, C.EVAL_BAR_W, C.BOARD_PX)
         pygame.draw.rect(self.screen, C.EVAL_BLACK, rect, border_radius=7)
         # map centipawns to a 0..1 share for White (clamped, gentle curve)
@@ -208,6 +212,8 @@ class UI:
 
     def draw_sidebar(self, state):
         self.buttons = {}
+        if getattr(state, "sidebar_minimized", False):
+            return
         x, w = C.SIDEBAR_X, C.SIDEBAR_W
         top = self.draw_tabs("tab_play")
         bottom = C.WINDOW_H - C.MARGIN
@@ -219,111 +225,9 @@ class UI:
         self.screen.blit(sub, (x, top + title.get_height() + 6))
         y = top + title.get_height() + sub.get_height() + C.SPACE_MD
 
-        # fixed-height elements below the chat (reserve their space)
-        chips_h = C.CHIP_H
-        input_h = C.CHAT_INPUT_H
-        btn_h = 44
-        buttons_h = btn_h * 2 + C.SPACE_SM
-        diff_h = 40
-        status_h = self.f_small.get_height()
-        reserved = (
-            C.SPACE_SM + chips_h + C.SPACE_SM + input_h + C.SPACE_MD +
-            buttons_h + C.SPACE_MD + diff_h + C.SPACE_SM + 44 +
-            C.SPACE_SM + status_h
-        )
-        chat_h = bottom - y - reserved
-
-        # chat card
-        card = pygame.Rect(x, y, w, chat_h)
-        self._card(card)
-        pad = C.SPACE_SM
-        label = self.f_small.render("YOUR COACH", True, C.TEXT_MUTED)
-        self.screen.blit(label, (x + pad, y + pad))
-        inner = pygame.Rect(
-            x + pad, y + pad + label.get_height() + C.SPACE_XS, w - pad * 2,
-            chat_h - pad * 2 - label.get_height() - C.SPACE_XS
-        )
-        self.chat_rect = inner
-
-        # render bubbles bottom-up with scroll
-        bubbles = []
-        bubble_w = inner.w - 36
-        for role, text in state.chat:
-            bubbles.append((role, *self._bubble(text, bubble_w, role == "user")))
-
-        if state.coach_thinking:
-            bubbles.append(("coach", *self._bubble("Coach is thinking...", bubble_w, False)))
-
-        total = sum(h for _, _, h in bubbles) + C.SPACE_XS * max(len(bubbles) - 1, 0)
-        max_scroll = max(0, total - inner.h)
-        state.chat_scroll = max(0, min(state.chat_scroll, max_scroll))
-        state.chat_max_scroll = max_scroll
-
-        clip = self.screen.get_clip()
-        self.screen.set_clip(inner)
-        by = inner.bottom + state.chat_scroll
-        for role, surf, h in reversed(bubbles):
-            by -= h
-            bx = inner.x + (inner.w - bubble_w if role == "user" else 0)
-            self.screen.blit(surf, (bx, by))
-            by -= C.SPACE_XS
-        self.screen.set_clip(clip)
-        y += chat_h + C.SPACE_SM
-
-        # quick chips
-        cx = x
-        for i, (label_text, _payload) in enumerate(state.chips):
-            img = self.f_small.render(label_text, True, C.TEXT_PRIMARY)
-            cw = img.get_width() + 28
-            rect = pygame.Rect(cx, y, cw, C.CHIP_H)
-            hover = rect.collidepoint(pygame.mouse.get_pos())
-            pygame.draw.rect(self.screen, C.BTN_BG_HOVER if hover else C.BTN_BG, rect, border_radius=17)
-            pygame.draw.rect(self.screen, C.BTN_BORDER, rect, 1, border_radius=17)
-            self.screen.blit(img, img.get_rect(center=rect.center))
-            self.buttons[f"chip{i}"] = rect
-            cx += cw + C.SPACE_XS
-
-        y += C.CHIP_H + C.SPACE_SM
-
-        # input row
-        send_w = 76
-        in_rect = pygame.Rect(x, y, w - send_w - C.SPACE_XS, C.CHAT_INPUT_H)
-        pygame.draw.rect(self.screen, C.CARD_BG, in_rect, border_radius=12)
-        border = C.HL_LAST_MOVE if state.input_focus else C.BTN_BORDER
-        pygame.draw.rect(self.screen, border, in_rect, 2, border_radius=12)
-        self.buttons["input"] = in_rect
-        text = state.input_text
-        placeholder = not text and not state.input_focus
-        shown = "Ask your coach anything..." if placeholder else text
-        color = C.TEXT_MUTED if placeholder else C.TEXT_PRIMARY
-        img = self.f_body.render(shown, True, color)
-
-        # keep the caret end visible if text overflows
-        max_w = in_rect.w - 28
-        if img.get_width() > max_w:
-            img = img.subsurface((img.get_width() - max_w, 0, max_w, img.get_height()))
-
-        self.screen.blit(img, (in_rect.x + 14,in_rect.centery - img.get_height() // 2))
-
-        if state.input_focus and (pygame.time.get_ticks() // 500) % 2 == 0:
-            cx2 = in_rect.x + 14 + min(self.f_body.size(text)[0], max_w)
-            pygame.draw.line(
-                self.screen, C.TEXT_PRIMARY,
-                (cx2 + 2, in_rect.y + 12),
-                (cx2 + 2, in_rect.bottom - 12), 2
-            )
-            
-        send = pygame.Rect(in_rect.right + C.SPACE_XS, y, send_w, C.CHAT_INPUT_H)
-        hover = send.collidepoint(pygame.mouse.get_pos())
-        pygame.draw.rect(self.screen, C.BTN_BG_HOVER if hover else C.BTN_BG, send, border_radius=12)
-        pygame.draw.rect(self.screen, C.BTN_BORDER, send, 1, border_radius=12)
-        img = self.f_body.render("Ask", True, C.TEXT_PRIMARY)
-        self.screen.blit(img, img.get_rect(center=send.center))
-        self.buttons["send"] = send
-        y += C.CHAT_INPUT_H + C.SPACE_MD
-
 
         # action buttons
+        btn_h = 44
         names = [("Hint", "hint"), ("Take back", "takeback"), ("Show threats", "threats"), ("New game", "new")]
         btn_w = (w - C.SPACE_SM) // 2
         for i, (label_text, key) in enumerate(names):
@@ -416,6 +320,8 @@ class UI:
 
     def draw_review_sidebar(self, state):
         self.buttons = {}
+        if getattr(state, "sidebar_minimized", False):
+            return
         x, w = C.SIDEBAR_X, C.SIDEBAR_W
         top, bottom = C.MARGIN, C.WINDOW_H - C.MARGIN
 
@@ -554,8 +460,8 @@ class UI:
     def draw_tabs(self, active):
         """Play / Practice / Lessons tab bar. Returns the y below it."""
         x, w = C.SIDEBAR_X, C.SIDEBAR_W
-        tabs = [("Play", "tab_play"), ("Practice", "tab_puzzle"), ("Lessons", "tab_lessons"), ("Stats", "tab_stats")]
-        tab_w = (w - C.SPACE_XS * 3) // 4
+        tabs = [("Play", "tab_play"), ("Practice", "tab_puzzle"), ("Lessons", "tab_lessons"), ("Stats", "tab_stats"), ("Guide", "tab_guide")]
+        tab_w = (w - C.SPACE_XS * 4) // 5
         for i, (label, key) in enumerate(tabs):
             rect = pygame.Rect(x + i * (tab_w + C.SPACE_XS), C.MARGIN, tab_w, 40)
             is_active = key == active
@@ -568,6 +474,8 @@ class UI:
                 pygame.draw.rect(self.screen, C.BTN_BORDER, rect, 1, border_radius=12)
 
             img = self.f_small.render(label, True, fg)
+            if img.get_width() > tab_w - 4:
+                img = pygame.transform.smoothscale(img, (tab_w - 4, int(img.get_height() * (tab_w - 4) / img.get_width())))
             self.screen.blit(img, img.get_rect(center=rect.center))
             self.buttons[key] = rect
         return C.MARGIN + 40 + C.SPACE_MD
@@ -604,6 +512,8 @@ class UI:
     # practice mode
     def draw_practice_sidebar(self, state):
         self.buttons = {}
+        if getattr(state, "sidebar_minimized", False):
+            return
         y = self.draw_tabs("tab_puzzle")
         x, w = C.SIDEBAR_X, C.SIDEBAR_W
 
@@ -653,6 +563,8 @@ class UI:
         import storage
         from content import LESSONS
         self.buttons = {}
+        if getattr(state, "sidebar_minimized", False):
+            return
         y = self.draw_tabs("tab_lessons")
         x, w = C.SIDEBAR_X, C.SIDEBAR_W
 
@@ -728,6 +640,8 @@ class UI:
         import storage
         from content import LESSONS
         self.buttons = {}
+        if getattr(state, "sidebar_minimized", False):
+            return
         y = self.draw_tabs("tab_stats")
         x, w = C.SIDEBAR_X, C.SIDEBAR_W
 
@@ -816,14 +730,160 @@ class UI:
         self._stat_row(y + C.SPACE_SM, "Lesson exercises completed", f"{done} of {total_ex}")
 
 
+    def draw_chat_sidebar(self, state):
+        if getattr(state, "sidebar_minimized", False):
+            return
+        x, w = C.CHAT_X, C.CHAT_W
+        y = C.MARGIN
+
+        chips_h = C.CHIP_H
+        input_h = C.CHAT_INPUT_H
+        reserved = C.SPACE_SM + chips_h + C.SPACE_SM + input_h + C.SPACE_MD
+        bottom = C.WINDOW_H - C.MARGIN
+        chat_h = bottom - y - reserved
+
+        card = pygame.Rect(x, y, w, chat_h)
+        self._card(card)
+        pad = C.SPACE_SM
+        label = self.f_small.render("YOUR COACH", True, C.TEXT_MUTED)
+        self.screen.blit(label, (x + pad, y + pad))
+        inner = pygame.Rect(
+            x + pad, y + pad + label.get_height() + C.SPACE_XS, w - pad * 2,
+            chat_h - pad * 2 - label.get_height() - C.SPACE_XS
+        )
+        self.chat_rect = inner
+
+        bubbles = []
+        bubble_w = inner.w - 36
+        for role, text in state.chat:
+            bubbles.append((role, *self._bubble(text, bubble_w, role == "user")))
+
+        if state.coach_thinking:
+            bubbles.append(("coach", *self._bubble("Coach is thinking...", bubble_w, False)))
+
+        total = sum(h for _, _, h in bubbles) + C.SPACE_XS * max(len(bubbles) - 1, 0)
+        max_scroll = max(0, total - inner.h)
+        state.chat_scroll = max(0, min(state.chat_scroll, max_scroll))
+        state.chat_max_scroll = max_scroll
+
+        clip = self.screen.get_clip()
+        self.screen.set_clip(inner)
+        by = inner.bottom + state.chat_scroll
+        for role, surf, h in reversed(bubbles):
+            by -= h
+            bx = inner.x + (inner.w - bubble_w if role == "user" else 0)
+            self.screen.blit(surf, (bx, by))
+            by -= C.SPACE_XS
+        self.screen.set_clip(clip)
+        y += chat_h + C.SPACE_SM
+
+        cx = x
+        for i, (label_text, _payload) in enumerate(state.chips):
+            img = self.f_small.render(label_text, True, C.TEXT_PRIMARY)
+            cw = img.get_width() + 28
+            rect = pygame.Rect(cx, y, cw, C.CHIP_H)
+            hover = rect.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(self.screen, C.BTN_BG_HOVER if hover else C.BTN_BG, rect, border_radius=17)
+            pygame.draw.rect(self.screen, C.BTN_BORDER, rect, 1, border_radius=17)
+            self.screen.blit(img, img.get_rect(center=rect.center))
+            self.buttons[f"chip{i}"] = rect
+            cx += cw + C.SPACE_XS
+
+        y += C.CHIP_H + C.SPACE_SM
+
+        send_w = 76
+        in_rect = pygame.Rect(x, y, w - send_w - C.SPACE_XS, C.CHAT_INPUT_H)
+        pygame.draw.rect(self.screen, C.CARD_BG, in_rect, border_radius=12)
+        border = C.HL_LAST_MOVE if state.input_focus else C.BTN_BORDER
+        pygame.draw.rect(self.screen, border, in_rect, 2, border_radius=12)
+        self.buttons["input"] = in_rect
+        text = state.input_text
+        placeholder = not text and not state.input_focus
+        shown = "Ask your coach anything..." if placeholder else text
+        color = C.TEXT_MUTED if placeholder else C.TEXT_PRIMARY
+        img = self.f_body.render(shown, True, color)
+
+        max_w = in_rect.w - 28
+        if img.get_width() > max_w:
+            img = img.subsurface((img.get_width() - max_w, 0, max_w, img.get_height()))
+
+        self.screen.blit(img, (in_rect.x + 14, in_rect.centery - img.get_height() // 2))
+
+        if state.input_focus and (pygame.time.get_ticks() // 500) % 2 == 0:
+            cx2 = in_rect.x + 14 + min(self.f_body.size(text)[0], max_w)
+            pygame.draw.line(self.screen, C.TEXT_PRIMARY, (cx2 + 2, in_rect.y + 12), (cx2 + 2, in_rect.bottom - 12), 2)
+            
+        send = pygame.Rect(in_rect.right + C.SPACE_XS, y, send_w, C.CHAT_INPUT_H)
+        hover = send.collidepoint(pygame.mouse.get_pos())
+        pygame.draw.rect(self.screen, C.BTN_BG_HOVER if hover else C.BTN_BG, send, border_radius=12)
+        pygame.draw.rect(self.screen, C.BTN_BORDER, send, 1, border_radius=12)
+        img = self.f_body.render("Ask", True, C.TEXT_PRIMARY)
+        self.screen.blit(img, img.get_rect(center=send.center))
+        self.buttons["send"] = send
+
+
+    def draw_guide_sidebar(self, state):
+        self.buttons = {}
+        if getattr(state, "sidebar_minimized", False):
+            return
+        y = self.draw_tabs("tab_guide")
+        x, w = C.SIDEBAR_X, C.SIDEBAR_W
+
+        title = self.f_title.render("Pieces Guide", True, C.TEXT_PRIMARY)
+        self.screen.blit(title, (x, y))
+        sub = self.f_small.render("What they do and how they move.", True, C.TEXT_SECOND)
+        self.screen.blit(sub, (x, y + title.get_height() + 6))
+        y += title.get_height() + sub.get_height() + C.SPACE_MD
+
+        pieces_info = [
+            ("King", "\u2654", "Moves one square in any direction. The most important piece - if it's trapped, you lose!"),
+            ("Queen", "\u2655", "Moves any number of squares in any direction. Extremely powerful."),
+            ("Rook", "\u2656", "Moves straight along rows and columns. Great for open files and back ranks."),
+            ("Bishop", "\u2657", "Moves diagonally any number of squares. Stays on one color its whole life."),
+            ("Knight", "\u2658", "Moves in an 'L' shape (two steps one way, one step side). Can jump over pieces."),
+            ("Pawn", "\u2659", "Moves forward one square (two on its first move). Captures diagonally.")
+        ]
+
+        for name, glyph, desc in pieces_info:
+            h = 80
+            rect = pygame.Rect(x, y, w, h)
+            self._card(rect)
+            
+            # Draw piece icon
+            pygame.draw.circle(self.screen, C.COACH_BUBBLE, (x + 40, y + 40), 24)
+            img = self.f_piece.render(glyph, True, C.PIECE_WHITE)
+            outl = self.f_piece.render(glyph, True, C.PIECE_OUTLINE_W)
+            for dx, dy in ((-2,0), (2,0), (0,-2), (0,2)):
+                self.screen.blit(outl, outl.get_rect(center=(x + 40 + dx, y + 40 + dy)))
+            self.screen.blit(img, img.get_rect(center=(x + 40, y + 40)))
+            
+            # Text
+            name_img = self.f_body.render(name, True, C.TEXT_PRIMARY)
+            self.screen.blit(name_img, (x + 80, y + 12))
+            
+            lines = self._wrap(desc, self.f_small, w - 90)
+            ty = y + 14 + name_img.get_height()
+            for ln in lines:
+                self.screen.blit(self.f_small.render(ln, True, C.TEXT_SECOND), (x + 80, ty))
+                ty += self.f_small.get_height() + 2
+
+            y += h + C.SPACE_SM
+
+
     # theme toggle
-    def draw_theme_toggle(self):
+    def draw_theme_toggle(self, state=None):
         """Small sun/moon button floating right of the sidebar."""
         size = 40
-        rect = pygame.Rect(C.WINDOW_W - C.MARGIN + (C.MARGIN - size) // 2, C.MARGIN, size, size)
+        if getattr(state, "sidebar_minimized", False):
+            x = C.WINDOW_W - C.MARGIN + (C.MARGIN - size) // 2
+            y = C.MARGIN
+            rect = pygame.Rect(x, y, size, size)
+            rect.right = min(rect.right, C.WINDOW_W - 8)
+        else:
+            x = min(C.SIDEBAR_X + C.SIDEBAR_W - size, C.WINDOW_W - size - 8)
+            y = C.MARGIN + 40 + C.SPACE_MD
+            rect = pygame.Rect(x, y, size, size)
 
-        # keep it inside the window even if margins change
-        rect.right = min(rect.right, C.WINDOW_W - 8)
         hover = rect.collidepoint(pygame.mouse.get_pos())
         pygame.draw.rect(self.screen, C.BTN_BG_HOVER if hover else C.BTN_BG, rect, border_radius=20)
         pygame.draw.rect(self.screen, C.BTN_BORDER, rect, 1, border_radius=20)
@@ -850,4 +910,18 @@ class UI:
                     (cx + dx * 9, cy + dy * 9),
                     (cx + dx * 13, cy + dy * 13), 2
                 )
+
+        if state is not None:
+            if getattr(state, "sidebar_minimized", False):
+                rect2 = pygame.Rect(rect.x, rect.bottom + C.SPACE_SM, size, size)
+            else:
+                rect2 = pygame.Rect(rect.x - size - C.SPACE_XS, rect.y, size, size)
+                
+            hover2 = rect2.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(self.screen, C.BTN_BG_HOVER if hover2 else C.BTN_BG, rect2, border_radius=12)
+            pygame.draw.rect(self.screen, C.BTN_BORDER, rect2, 1, border_radius=12)
+            icon = "<" if state.sidebar_minimized else ">"
+            img2 = self.f_body.render(icon, True, C.TEXT_PRIMARY)
+            self.screen.blit(img2, img2.get_rect(center=rect2.center))
+            self.buttons["toggle_sidebar"] = rect2
         self.buttons["theme"] = rect
